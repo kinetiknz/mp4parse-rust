@@ -4,6 +4,9 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+#![feature(test)]
+extern crate test;
+
 use std::fmt;
 
 /// Expose C api wrapper.
@@ -994,4 +997,241 @@ fn test_read_mdhd_v1() {
     assert_eq!(parsed.timescale, 16909060);
     assert_eq!(parsed.duration, 361984551075317512);
     println!("box {:?}", parsed);
+}
+
+#[cfg(test)]
+fn fourcc1(atom: FourCC) -> bool {
+    match &fourcc_to_string(atom)[..] {
+        "ftyp" => false,
+        "moov" => false,
+        "mvhd" => false,
+        "trak" => false,
+        "tkhd" => false,
+        "edts" => false,
+        "elst" => false,
+        "mdia" => false,
+        "mdhd" => true,
+        "minf" => false,
+        "stbl" => false,
+        "stco" => false,
+        "co64" => false,
+        "stss" => false,
+        "stsc" => false,
+        "stsz" => false,
+        "stts" => false,
+        "hdlr" => false,
+        "stsd" => false,
+        _ => panic!("invalid atom"),
+    }
+}
+
+#[cfg(test)]
+fn fourcc2(atom: &[u8; 4]) -> bool {
+    match atom {
+        b"ftyp" => false,
+        b"moov" => false,
+        b"mvhd" => false,
+        b"trak" => false,
+        b"tkhd" => false,
+        b"edts" => false,
+        b"elst" => false,
+        b"mdia" => false,
+        b"mdhd" => true,
+        b"minf" => false,
+        b"stbl" => false,
+        b"stco" => false,
+        b"co64" => false,
+        b"stss" => false,
+        b"stsc" => false,
+        b"stsz" => false,
+        b"stts" => false,
+        b"hdlr" => false,
+        b"stsd" => false,
+        _ => panic!("invalid atom"),
+    }
+}
+
+#[cfg(test)]
+fn fourcc3(atom: FourCC) -> bool {
+    match atom {
+        FourCC(0x66747970) => false,
+        FourCC(0x6d6f6f76) => false,
+        FourCC(0x6d766864) => false,
+        FourCC(0x7472616b) => false,
+        FourCC(0x746b6864) => false,
+        FourCC(0x65647473) => false,
+        FourCC(0x656c7374) => false,
+        FourCC(0x6d646961) => false,
+        FourCC(0x6d646864) => true,
+        FourCC(0x6d696e66) => false,
+        FourCC(0x7374626c) => false,
+        FourCC(0x7374636f) => false,
+        FourCC(0x636f3634) => false,
+        FourCC(0x73747373) => false,
+        FourCC(0x73747363) => false,
+        FourCC(0x7374737a) => false,
+        FourCC(0x73747473) => false,
+        FourCC(0x68646c72) => false,
+        FourCC(0x73747364) => false,
+        _ => panic!("invalid atom"),
+    }
+}
+
+#[cfg(test)]
+fn fourcc4(atom: u32) -> bool {
+    match atom {
+        0x66747970 => false,
+        0x6d6f6f76 => false,
+        0x6d766864 => false,
+        0x7472616b => false,
+        0x746b6864 => false,
+        0x65647473 => false,
+        0x656c7374 => false,
+        0x6d646961 => false,
+        0x6d646864 => true,
+        0x6d696e66 => false,
+        0x7374626c => false,
+        0x7374636f => false,
+        0x636f3634 => false,
+        0x73747373 => false,
+        0x73747363 => false,
+        0x7374737a => false,
+        0x73747473 => false,
+        0x68646c72 => false,
+        0x73747364 => false,
+        _ => panic!("invalid atom"),
+    }
+}
+
+#[cfg(test)]
+#[derive(Clone, Copy)]
+enum Atom {
+    Ftyp,
+    Moov,
+    Mvhd,
+    Trak,
+    Tkhd,
+    Edts,
+    Elst,
+    Mdia,
+    Mdhd,
+    Minf,
+    Stbl,
+    Stco,
+    Co64,
+    Stss,
+    Stsc,
+    Stsz,
+    Stts,
+    Hdlr,
+    Stsd,
+}
+
+#[cfg(test)]
+static ATOMS: [Atom; 19] = [ Atom::Ftyp,
+                             Atom::Moov,
+                             Atom::Mvhd,
+                             Atom::Trak,
+                             Atom::Tkhd,
+                             Atom::Edts,
+                             Atom::Elst,
+                             Atom::Mdia,
+                             Atom::Mdhd,
+                             Atom::Minf,
+                             Atom::Stbl,
+                             Atom::Stco,
+                             Atom::Co64,
+                             Atom::Stss,
+                             Atom::Stsc,
+                             Atom::Stsz,
+                             Atom::Stts,
+                             Atom::Hdlr,
+                             Atom::Stsd, ];
+
+#[cfg(test)]
+fn fourcc5(atom: Atom) -> bool {
+    match atom {
+        Atom::Ftyp => false,
+        Atom::Moov => false,
+        Atom::Mvhd => false,
+        Atom::Trak => false,
+        Atom::Tkhd => false,
+        Atom::Edts => false,
+        Atom::Elst => false,
+        Atom::Mdia => false,
+        Atom::Mdhd => true,
+        Atom::Minf => false,
+        Atom::Stbl => false,
+        Atom::Stco => false,
+        Atom::Co64 => false,
+        Atom::Stss => false,
+        Atom::Stsc => false,
+        Atom::Stsz => false,
+        Atom::Stts => false,
+        Atom::Hdlr => false,
+        Atom::Stsd => false,
+    }
+}
+
+#[bench]
+fn bench_fourcc1(b: &mut test::Bencher) {
+    b.iter(|| {
+        let atom = test::black_box(FourCC(1835296868));
+
+        for _ in 0..100 {
+            fourcc1(atom);
+        }
+    });
+}
+
+#[bench]
+fn bench_fourcc2(b: &mut test::Bencher) {
+    b.iter(|| {
+        let atom = test::black_box(b"mdhd");
+
+        for _ in 0..100 {
+            fourcc2(atom);
+        }
+    });
+}
+
+#[bench]
+fn bench_fourcc3(b: &mut test::Bencher) {
+    b.iter(|| {
+        let atom = test::black_box(FourCC(1835296868));
+
+        for _ in 0..100 {
+            fourcc3(atom);
+        }
+    });
+}
+
+#[bench]
+fn bench_fourcc4(b: &mut test::Bencher) {
+    b.iter(|| {
+        let atom = test::black_box(1835296868);
+
+        for _ in 0..100 {
+            fourcc4(atom);
+        }
+    });
+}
+
+#[bench]
+fn bench_fourcc5(b: &mut test::Bencher) {
+    b.iter(|| {
+        let atom = test::black_box(Atom::Mdhd);
+
+        for _ in 0..100 {
+            fourcc5(atom);
+        }
+    });
+}
+
+#[bench]
+fn fourcc5_iter(b: &mut test::Bencher) {
+    b.iter(|| {
+        for _ in ATOMS.iter() {
+        }
+    });
 }
