@@ -1,0 +1,6 @@
+[package]
+name = "monkeyvec"
+version = "0.1.0"
+authors = ["Matthew Gregan <kinetik@flim.org>"]
+
+[dependencies]

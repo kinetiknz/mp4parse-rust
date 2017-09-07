@@ -11,6 +11,7 @@ use super::MediaContext;
 use super::Error;
 extern crate test_assembler;
 use self::test_assembler::*;
+use monkeyvec;
 
 use boxes::{BoxType, FourCC};
 
@@ -638,7 +639,7 @@ fn serialize_opus_header() {
         channel_mapping_table: Some(super::ChannelMappingTable {
             stream_count: 4,
             coupled_count: 2,
-            channel_mapping: vec![0, 4, 1, 2, 3, 5],
+            channel_mapping: monkeyvec::Vec::from_slice(&[0, 4, 1, 2, 3, 5]).unwrap(),
         }),
     };
     let mut v = Vec::<u8>::new();

@@ -37,11 +37,13 @@
 extern crate mp4parse;
 extern crate byteorder;
 extern crate num_traits;
+extern crate monkeyvec;
 
 use std::io::Read;
 use std::collections::HashMap;
 use byteorder::WriteBytesExt;
 use num_traits::{PrimInt, Zero};
+use monkeyvec::Vec;
 
 // Symbols we need from our rust api.
 use mp4parse::MediaContext;
@@ -316,8 +318,8 @@ pub unsafe extern fn mp4parse_read(parser: *mut mp4parse_parser) -> mp4parse_sta
         return mp4parse_status::BAD_ARG;
     }
 
-    let mut context = (*parser).context_mut();
-    let mut io = (*parser).io_mut();
+    let context = (*parser).context_mut();
+    let io = (*parser).io_mut();
 
     let r = read_mp4(io, context);
     match r {
@@ -900,7 +902,7 @@ fn create_sample_table(track: &Track, track_offset_time: i64) -> Option<Vec<mp4p
             }
             cur_position = end_offset;
 
-            sample_table.push(
+            if sample_table.push(
                 mp4parse_indice {
                     start_offset: start_offset,
                     end_offset: end_offset,
@@ -909,7 +911,9 @@ fn create_sample_table(track: &Track, track_offset_time: i64) -> Option<Vec<mp4p
                     start_decode: 0,
                     sync: !has_sync_table,
                 }
-            );
+            ).is_err() {
+                return None;
+            }
         }
     }
 
@@ -980,9 +984,13 @@ fn create_sample_table(track: &Track, track_offset_time: i64) -> Option<Vec<mp4p
     if sample_table.len() > 0 {
         // Create an index table refers to sample_table and sorted by start_composisiton time.
         let mut sort_table = Vec::new();
-        sort_table.reserve(sample_table.len());
+        if sort_table.reserve(sample_table.len()).is_err() {
+            return None;
+        }
         for i in 0 .. sample_table.len() {
-            sort_table.push(i);
+            if sort_table.push(i).is_err() {
+                return None;
+            }
         }
 
         sort_table.sort_by_key(|i| {
@@ -1094,9 +1102,15 @@ pub unsafe extern fn mp4parse_get_pssh_info(parser: *mut mp4parse_parser, info: 
         if data_len.write_u32::<byteorder::NativeEndian>(content_len as u32).is_err() {
             return mp4parse_status::IO;
         }
-        pssh_data.extend_from_slice(pssh.system_id.as_slice());
-        pssh_data.extend_from_slice(data_len.as_slice());
-        pssh_data.extend_from_slice(pssh.box_content.as_slice());
+        if pssh_data.extend_from_slice(pssh.system_id.as_slice()).is_err() {
+            return mp4parse_status::TABLE_TOO_LARGE;
+        }
+        if pssh_data.extend_from_slice(data_len.as_slice()).is_err() {
+            return mp4parse_status::TABLE_TOO_LARGE;
+        }
+        if pssh_data.extend_from_slice(pssh.box_content.as_slice()).is_err() {
+            return mp4parse_status::TABLE_TOO_LARGE;
+        }
     }
 
     info.data.set_data(pssh_data);

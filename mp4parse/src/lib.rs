@@ -11,12 +11,14 @@ extern crate afl;
 extern crate byteorder;
 extern crate bitreader;
 extern crate num_traits;
+extern crate monkeyvec;
 use byteorder::{ReadBytesExt, WriteBytesExt};
 use bitreader::{BitReader, ReadInto};
 use std::io::{Read, Take};
 use std::io::Cursor;
 use std::cmp;
 use num_traits::Num;
+use monkeyvec::Vec;
 
 mod boxes;
 use boxes::{BoxType, FourCC};
@@ -76,6 +78,12 @@ pub enum Error {
     TableTooLarge,
 }
 
+impl From<()> for Error {
+    fn from(_: ()) -> Error {
+        Error::InvalidData("oops")
+    }
+}
+
 impl From<bitreader::BitReaderError> for Error {
     fn from(_: bitreader::BitReaderError) -> Error {
         Error::InvalidData("invalid data")
@@ -91,8 +99,8 @@ impl From<std::io::Error> for Error {
     }
 }
 
-impl From<std::string::FromUtf8Error> for Error {
-    fn from(_: std::string::FromUtf8Error) -> Error {
+impl From<std::str::Utf8Error> for Error {
+    fn from(_: std::str::Utf8Error) -> Error {
         Error::InvalidData("invalid utf8")
     }
 }
@@ -689,7 +697,7 @@ fn read_moov<T: Read>(f: &mut BMFFBox<T>, context: &mut MediaContext) -> Result<
             BoxType::TrackBox => {
                 let mut track = Track::new(context.tracks.len());
                 read_trak(&mut b, &mut track)?;
-                context.tracks.push(track);
+                context.tracks.push(track)?;
             }
             BoxType::MovieExtendsBox => {
                 let mvex = read_mvex(&mut b)?;
@@ -699,7 +707,7 @@ fn read_moov<T: Read>(f: &mut BMFFBox<T>, context: &mut MediaContext) -> Result<
             BoxType::ProtectionSystemSpecificHeaderBox => {
                 let pssh = read_pssh(&mut b)?;
                 log!("{:?}", pssh);
-                context.psshs.push(pssh);
+                context.psshs.push(pssh)?;
             }
             _ => skip_box_content(&mut b)?,
         };
@@ -723,7 +731,7 @@ fn read_pssh<T: Read>(src: &mut BMFFBox<T>) -> Result<ProtectionSystemSpecificHe
             let count = be_u32_with_limit(pssh)?;
             for _ in 0..count {
                 let item = read_buf(pssh, 16)?;
-                kid.push(item);
+                kid.push(item)?;
             }
         }
 
@@ -735,8 +743,8 @@ fn read_pssh<T: Read>(src: &mut BMFFBox<T>) -> Result<ProtectionSystemSpecificHe
 
     let mut pssh_box = Vec::new();
     write_be_u32(&mut pssh_box, src.head.size as u32)?;
-    pssh_box.append(&mut b"pssh".to_vec());
-    pssh_box.append(&mut box_content);
+    pssh_box.extend_from_slice(b"pssh")?;
+    pssh_box.append(&mut box_content)?;
 
     Ok(ProtectionSystemSpecificHeaderBox {
         system_id: system_id,
@@ -940,7 +948,7 @@ fn read_ftyp<T: Read>(src: &mut BMFFBox<T>) -> Result<FileTypeBox> {
     let brand_count = bytes_left / 4;
     let mut brands = Vec::new();
     for _ in 0..brand_count {
-        brands.push(From::from(be_u32(src)?));
+        brands.push(From::from(be_u32(src)?))?;
     }
     Ok(FileTypeBox {
         major_brand: From::from(major),
@@ -1054,7 +1062,7 @@ fn read_elst<T: Read>(src: &mut BMFFBox<T>) -> Result<EditListBox> {
             media_time: media_time,
             media_rate_integer: media_rate_integer,
             media_rate_fraction: media_rate_fraction,
-        })
+        })?
     }
 
     Ok(EditListBox {
@@ -1110,7 +1118,7 @@ fn read_stco<T: Read>(src: &mut BMFFBox<T>) -> Result<ChunkOffsetBox> {
     let offset_count = be_u32_with_limit(src)?;
     let mut offsets = Vec::new();
     for _ in 0..offset_count {
-        offsets.push(be_u32(src)? as u64);
+        offsets.push(be_u32(src)? as u64)?;
     }
 
     // Padding could be added in some contents.
@@ -1127,7 +1135,7 @@ fn read_co64<T: Read>(src: &mut BMFFBox<T>) -> Result<ChunkOffsetBox> {
     let offset_count = be_u32_with_limit(src)?;
     let mut offsets = Vec::new();
     for _ in 0..offset_count {
-        offsets.push(be_u64(src)?);
+        offsets.push(be_u64(src)?)?;
     }
 
     // Padding could be added in some contents.
@@ -1144,7 +1152,7 @@ fn read_stss<T: Read>(src: &mut BMFFBox<T>) -> Result<SyncSampleBox> {
     let sample_count = be_u32_with_limit(src)?;
     let mut samples = Vec::new();
     for _ in 0..sample_count {
-        samples.push(be_u32(src)?);
+        samples.push(be_u32(src)?)?;
     }
 
     // Padding could be added in some contents.
@@ -1168,7 +1176,7 @@ fn read_stsc<T: Read>(src: &mut BMFFBox<T>) -> Result<SampleToChunkBox> {
             first_chunk: first_chunk,
             samples_per_chunk: samples_per_chunk,
             sample_description_index: sample_description_index,
-        });
+        })?;
     }
 
     // Padding could be added in some contents.
@@ -1206,7 +1214,7 @@ fn read_ctts<T: Read>(src: &mut BMFFBox<T>) -> Result<CompositionOffsetBox> {
         offsets.push(TimeOffset {
             sample_count: sample_count,
             time_offset: time_offset,
-        });
+        })?;
     }
 
     skip_box_remain(src)?;
@@ -1224,7 +1232,7 @@ fn read_stsz<T: Read>(src: &mut BMFFBox<T>) -> Result<SampleSizeBox> {
     let mut sample_sizes = Vec::new();
     if sample_size == 0 {
         for _ in 0..sample_count {
-            sample_sizes.push(be_u32(src)?);
+            sample_sizes.push(be_u32(src)?)?;
         }
     }
 
@@ -1248,7 +1256,7 @@ fn read_stts<T: Read>(src: &mut BMFFBox<T>) -> Result<TimeToSampleBox> {
         samples.push(Sample {
             sample_count: sample_count,
             sample_delta: sample_delta,
-        });
+        })?;
     }
 
     // Padding could be added in some contents.
@@ -1455,7 +1463,7 @@ fn read_ds_descriptor(data: &[u8], esds: &mut ES_Descriptor) -> Result<()> {
     esds.audio_sample_rate = sample_frequency;
     esds.audio_channel_count = Some(channel_counts);
     assert!(esds.decoder_specific_data.is_empty());
-    esds.decoder_specific_data.extend(data.iter());
+    esds.decoder_specific_data.extend_from_slice(data)?;
 
     Ok(())
 }
@@ -1543,7 +1551,7 @@ fn read_dfla<T: Read>(src: &mut BMFFBox<T>) -> Result<FLACSpecificBox> {
     let mut blocks = Vec::new();
     while src.bytes_left() > 0 {
         let block = read_flac_metadata(src)?;
-        blocks.push(block);
+        blocks.push(block)?;
     }
     // The box must have at least one meta block, and the first block
     // must be the METADATA_BLOCK_STREAMINFO
@@ -1737,7 +1745,7 @@ fn read_video_sample_entry<T: Read>(src: &mut BMFFBox<T>) -> Result<(CodecType, 
                 }
                 let sinf = read_sinf(&mut b)?;
                 log!("{:?} (sinf)", sinf);
-                protection_info.push(sinf);
+                protection_info.push(sinf)?;
             }
             _ => {
                 log!("Unsupported video codec, box {:?} found", b.head.name);
@@ -1862,7 +1870,7 @@ fn read_audio_sample_entry<T: Read>(src: &mut BMFFBox<T>) -> Result<(CodecType, 
                 let sinf = read_sinf(&mut b)?;
                 log!("{:?} (sinf)", sinf);
                 codec_type = CodecType::EncryptedAudio;
-                protection_info.push(sinf);
+                protection_info.push(sinf)?;
             }
             _ => {
                 log!("Unsupported audio codec, box {:?} found", b.head.name);
@@ -1920,7 +1928,7 @@ fn read_stsd<T: Read>(src: &mut BMFFBox<T>, track: &mut Track) -> Result<SampleD
             } else {
                 log!("** don't know how to handle multiple descriptions **");
             }
-            descriptions.push(description);
+            descriptions.push(description)?;
             check_parser_state!(b.content);
             if descriptions.len() == description_count as usize {
                 break;
@@ -1992,7 +2000,7 @@ fn read_tenc<T: Read>(src: &mut BMFFBox<T>) -> Result<TrackEncryptionBox> {
 
 fn read_frma<T: Read>(src: &mut BMFFBox<T>) -> Result<String> {
     let code_name = read_buf(src, 4)?;
-    String::from_utf8(code_name).map_err(From::from)
+    std::str::from_utf8(&code_name).map(|s| s.to_owned()).map_err(From::from)
 }
 
 /// Skip a number of bytes that we don't care to parse.
@@ -2015,7 +2023,7 @@ fn read_buf<T: ReadBytesExt>(src: &mut T, size: usize) -> Result<Vec<u8>> {
     if size > BUF_SIZE_LIMIT {
         return Err(Error::InvalidData("read_buf size exceeds BUF_SIZE_LIMIT"));
     }
-    let mut buf = vec![0; size];
+    let mut buf = Vec::with_len(size)?;
     let r = src.read(&mut buf)?;
     if r != size {
         return Err(Error::InvalidData("failed buffer read"));
