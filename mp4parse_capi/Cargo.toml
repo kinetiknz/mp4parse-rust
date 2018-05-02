@@ -25,8 +25,6 @@ travis-ci = { repository = "https://github.com/mozilla/mp4parse-rust" }
 byteorder = "1.2.1"
 log = "0.4"
 
-# To enable fallible memory allocation, add 'features = ["mp4parse_fallible"]'
-# in mp4parse brace.
 mp4parse = {version = "0.10.1", path = "../mp4parse"}
 num-traits = "0.2.0"
 

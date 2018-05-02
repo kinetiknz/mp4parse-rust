@@ -3,6 +3,8 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
+#![feature(try_reserve)]
+
 #[cfg(feature = "fuzz")]
 extern crate afl;
 
@@ -19,12 +21,6 @@ use std::io::Cursor;
 use std::cmp;
 use num_traits::Num;
 
-#[cfg(feature = "mp4parse_fallible")]
-extern crate mp4parse_fallible;
-
-#[cfg(feature = "mp4parse_fallible")]
-use mp4parse_fallible::FallibleVec;
-
 mod boxes;
 use boxes::{BoxType, FourCC};
 
@@ -39,41 +35,25 @@ const BUF_SIZE_LIMIT: usize = 1024 * 1024;
 // frame per table entry in 30 fps.
 const TABLE_SIZE_LIMIT: u32 = 30 * 60 * 60 * 24 * 7;
 
-// TODO: vec_push() and vec_reserve() needs to be replaced when Rust supports
-// fallible memory allocation in raw_vec.
 #[allow(unreachable_code)]
-pub fn vec_push<T>(vec: &mut Vec<T>, val: T) -> std::result::Result<(), ()> {
-    #[cfg(feature = "mp4parse_fallible")]
-    {
-        return FallibleVec::try_push(vec, val);
-    }
-
+pub fn vec_push<T>(vec: &mut Vec<T>, val: T) -> Result<()> {
+    vec.try_reserve(1)?;
     vec.push(val);
     Ok(())
 }
 
 #[allow(unreachable_code)]
-pub fn vec_reserve<T>(vec: &mut Vec<T>, size: usize) -> std::result::Result<(), ()> {
-    #[cfg(feature = "mp4parse_fallible")]
-    {
-        return FallibleVec::try_reserve(vec, size);
-    }
-
-    vec.reserve(size);
+pub fn vec_reserve<T>(vec: &mut Vec<T>, size: usize) -> Result<()> {
+    vec.try_reserve(size)?;
     Ok(())
 }
 
 #[allow(unreachable_code)]
-fn allocate_read_buf(size: usize) -> std::result::Result<Vec<u8>, ()> {
-    #[cfg(feature = "mp4parse_fallible")]
-    {
-        let mut buf: Vec<u8> = Vec::new();
-        FallibleVec::try_reserve(&mut buf, size)?;
-        unsafe { buf.set_len(size); }
-        return Ok(buf);
-    }
-
-    Ok(vec![0; size])
+fn allocate_read_buf(size: usize) -> Result<Vec<u8>> {
+    let mut buf: Vec<u8> = Vec::new();
+    buf.try_reserve_exact(size)?;
+    unsafe { buf.set_len(size); }
+    return Ok(buf);
 }
 
 /// Describes parser failures.
@@ -94,6 +74,12 @@ pub enum Error {
     NoMoov,
     /// Out of memory
     OutOfMemory,
+}
+
+impl From<std::collections::CollectionAllocErr> for Error {
+    fn from(_: std::collections::CollectionAllocErr) -> Error {
+        Error::OutOfMemory
+    }
 }
 
 impl From<bitreader::BitReaderError> for Error {
